@@ -12,7 +12,11 @@
         android:theme="@style/Theme.AniPub"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true">
-
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

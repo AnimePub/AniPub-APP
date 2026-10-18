@@ -9,15 +9,25 @@ import java.io.ByteArrayInputStream
 
 /**
  * Blocks requests to ad/tracker hosts (including requests made from inside iframes),
- * and stops ad redirects from hijacking the app's main page.
+ * stops ad redirects from hijacking the app's main page, and reports HLS (.m3u8) requests.
  */
-class AdBlocker(private val allowedPageHosts: Set<String>) : WebViewClient() {
+class AdBlocker(
+    private val allowedPageHosts: Set<String>,
+    private val onStream: ((url: String, headers: Map<String, String>) -> Unit)? = null
+) : WebViewClient() {
 
     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
         val uri = request?.url ?: return null
-        return if (isBlocked(uri)) {
-            WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
-        } else null
+
+        if (isBlocked(uri)) {
+            return WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+        }
+
+        // Runs on a background thread, so the callback must be thread-safe.
+        if (onStream != null && uri.path?.endsWith(".m3u8", ignoreCase = true) == true) {
+            onStream.invoke(uri.toString(), request.requestHeaders ?: emptyMap())
+        }
+        return null
     }
 
     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

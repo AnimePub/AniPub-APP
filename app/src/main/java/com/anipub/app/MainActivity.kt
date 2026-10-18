@@ -16,6 +16,7 @@ import android.os.Looper
 import android.os.Message
 import android.view.View
 import android.view.WindowManager
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -29,8 +30,15 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 
 class MainActivity : AppCompatActivity() {
+
+    private data class Stream(val url: String, val headers: Map<String, String>)
+    private val streams = CopyOnWriteArrayList<Stream>()
 
     private lateinit var root: FrameLayout
     private lateinit var web: WebView
@@ -40,13 +48,20 @@ class MainActivity : AppCompatActivity() {
     private var customView: View? = null
     private var customCb: WebChromeClient.CustomViewCallback? = null
 
-    //  break reminder state
+    // ---- break reminder state ----
     private val handler = Handler(Looper.getMainLooper())
     private var breakMin = 180            // minutes of continuous use before reminder (0 = off)
     private var usedMs = 0L
     private var resumedAt = 0L
     private var pausedAt = 0L
     private val breakTask = Runnable { fireBreak() }
+
+    private val downloader by lazy {
+        Downloader(this) { json ->
+            runOnUiThread { web.evaluateJavascript("onDl($json)", null) }
+            DownloadService.report(this, json)
+        }
+    }
 
     private val notifPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -79,7 +94,7 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)   // draw edge-to-edge, we pad manually
 
         root = FrameLayout(this)
-        root.setBackgroundColor(0xFF121218.toInt())
+        root.setBackgroundColor(0xFF0F0D1C.toInt())
         web = WebView(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             settings.javaScriptEnabled = true
@@ -88,7 +103,9 @@ class MainActivity : AppCompatActivity() {
             settings.allowFileAccess = true
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
-            webViewClient = AdBlocker(setOf("anipub.xyz"))
+            webViewClient = AdBlocker(setOf("anipub.org", "anipub.org")) { url, headers ->
+                onStreamSniffed(url, headers)
+            }
             webChromeClient = chrome
             addJavascriptInterface(Bridge(), "Android")
         }
@@ -121,6 +138,23 @@ class MainActivity : AppCompatActivity() {
         web.loadUrl("file:///android_asset/index.html")
     }
 
+    /** Called on a background thread whenever a req is made. */
+    private fun onStreamSniffed(url: String, headers: Map<String, String>) {
+        if (streams.any { it.url == url }) return
+        val h = headers.toMutableMap()
+        CookieManager.getInstance().getCookie(url)
+            ?.takeIf { it.isNotBlank() }?.let { h["Cookie"] = it }
+        streams.add(Stream(url, h))
+        while (streams.size > 20) streams.removeAt(0)
+    }
+
+    /** Only files inside the AniPub folder may be played or deleted. */
+    private fun ownedFile(path: String): File? {
+        val f = File(path)
+        val base = Downloader.root(this).canonicalPath
+        return if (f.canonicalPath.startsWith(base + File.separator) && f.isFile) f else null
+    }
+
     /** Functions the page can call as Android.xxx() */
     inner class Bridge {
         @JavascriptInterface
@@ -135,15 +169,102 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun setBreakMinutes(m: Int) { runOnUiThread { breakMin = m; schedule() } }
+
+        /** Sniffed HLS streams . newest last, as JSON: [{url, headers}] */
+        @JavascriptInterface
+        fun getStreams(): String {
+            val arr = JSONArray()
+            streams.forEach { s ->
+                arr.put(JSONObject().put("url", s.url).put("headers", JSONObject(s.headers)))
+            }
+            return arr.toString()
+        }
+
+        @JavascriptInterface
+        fun clearStreams() { streams.clear() }
+
+        /** Starts a download into AniPub/<folder>/<name>. */
+        @JavascriptInterface
+        fun startDownload(key: String, url: String, folder: String, name: String, headersJson: String) {
+            if (!url.startsWith("http")) return
+            val h = HashMap<String, String>()
+            try { val o = JSONObject(headersJson); o.keys().forEach { h[it] = o.getString(it) } } catch (e: Exception) { }
+            DownloadService.start(this@MainActivity)
+            downloader.start(key, url, folder, name, h)
+        }
+
+        /** Returns the saved file path if this episode is already downloaded, otherwise as  heh "". */
+        @JavascriptInterface
+        fun findDownload(folder: String, name: String): String {
+            val dir = File(Downloader.root(this@MainActivity), Downloader.safeFolder(folder))
+            val base = Downloader.safeFile(name)
+            return dir.listFiles { f -> f.isFile && f.nameWithoutExtension == base }?.firstOrNull()?.absolutePath ?: ""
+        }
+
+        @JavascriptInterface
+        fun cancelDownload(key: String) { downloader.cancel(key) }
+
+        /** Library JSON  [{folder, files:[{name, path, size, time}]}] */
+        @JavascriptInterface
+        fun listDownloads(): String {
+            val arr = JSONArray()
+            Downloader.root(this@MainActivity).listFiles { f -> f.isDirectory }
+                ?.sortedBy { it.name.lowercase() }
+                ?.forEach { dir ->
+                    val files = dir.listFiles { f -> f.isFile }?.sortedBy { it.name.lowercase() } ?: emptyList()
+                    if (files.isEmpty()) return@forEach
+                    val fa = JSONArray()
+                    files.forEach { f ->
+                        fa.put(JSONObject()
+                            .put("name", f.nameWithoutExtension)
+                            .put("path", f.absolutePath)
+                            .put("size", f.length())
+                            .put("time", f.lastModified()))
+                    }
+                    arr.put(JSONObject().put("folder", dir.name).put("files", fa))
+                }
+            return arr.toString()
+        }
+
+        @JavascriptInterface
+        fun deleteDownload(path: String): Boolean {
+            val f = ownedFile(path) ?: return false
+            val ok = f.delete()
+            f.parentFile?.let { d -> if (d.listFiles()?.isEmpty() == true) d.delete() }
+            return ok
+        }
+
+        @JavascriptInterface
+        fun playFile(path: String) {
+            val f = ownedFile(path) ?: return
+            runOnUiThread {
+                startActivity(
+                    Intent(this@MainActivity, PlayerActivity::class.java)
+                        .putExtra(PlayerActivity.EXTRA_PATH, f.absolutePath)
+                        .putExtra(PlayerActivity.EXTRA_TITLE, "${f.parentFile?.name ?: ""}  ${f.nameWithoutExtension}")
+                )
+            }
+        }
+
+        @JavascriptInterface
+        fun openUrl(u: String) {
+            if (u.startsWith("https://") || u.startsWith("http://")) runOnUiThread {
+                try { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(u))) } catch (e: Exception) { }
+            }
+        }
+
+        @JavascriptInterface
+        fun getVersion(): String =
+            try { packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0" } catch (e: Exception) { "1.0" }
     }
 
     private fun applyBars(dark: Boolean) {
-        root.setBackgroundColor(if (dark) 0xFF121218.toInt() else 0xFFF4F5F9.toInt())
+        root.setBackgroundColor(if (dark) 0xFF0F0D1C.toInt() else 0xFF0F0D1C.toInt())
         bars.isAppearanceLightStatusBars = !dark
         bars.isAppearanceLightNavigationBars = !dark
     }
 
-    /** Hide system bars + landscape + keep screen on while watching fullscreen. */
+    /** Hide system bars,landscape + keep screen on while watching fullscreen. */
     private fun enterFullscreen(on: Boolean) {
         fsMode = on
         if (on) {
@@ -160,7 +281,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    //  break reminder
+    // break reminder
 
     private fun schedule() {
         handler.removeCallbacks(breakTask)
@@ -196,7 +317,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         val now = System.currentTimeMillis()
-        if (pausedAt > 0 && now - pausedAt > RESET_GAP) usedMs = 0
+        if (pausedAt > 0 && now - pausedAt > RESET_GAP) usedMs = 0   // away >15 min = new session
         resumedAt = now
         schedule()
         web.onResume()
@@ -212,7 +333,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        web.evaluateJavascript("applyTheme()", null)
+        web.evaluateJavascript("applyTheme()", null)   // phone switched dark/light
     }
 
     override fun onDestroy() {
