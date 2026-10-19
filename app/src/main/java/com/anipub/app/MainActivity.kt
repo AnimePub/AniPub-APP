@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
     private var customView: View? = null
     private var customCb: WebChromeClient.CustomViewCallback? = null
 
-    // ---- break reminder state ----
+    //  break reminder state 
     private val handler = Handler(Looper.getMainLooper())
     private var breakMin = 180            // minutes of continuous use before reminder (0 = off)
     private var usedMs = 0L
@@ -94,9 +94,12 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)   // draw edge-to-edge, we pad manually
 
         root = FrameLayout(this)
-        root.setBackgroundColor(0xFF0F0D1C.toInt())
+        root.setBackgroundColor(0xFF0A1424.toInt())
         web = WebView(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
+            isVerticalScrollBarEnabled = false      // hide the Android scrollbar
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
@@ -136,9 +139,10 @@ class MainActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= 33) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         web.loadUrl("file:///android_asset/index.html")
+        Thread { Api.register(this) }.start()
     }
 
-    /** Called on a background thread whenever a req is made. */
+    /** Called on a background thread by AdBlocker whenever an .m3u8 request is made. */
     private fun onStreamSniffed(url: String, headers: Map<String, String>) {
         if (streams.any { it.url == url }) return
         val h = headers.toMutableMap()
@@ -170,7 +174,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun setBreakMinutes(m: Int) { runOnUiThread { breakMin = m; schedule() } }
 
-        /** Sniffed HLS streams . newest last, as JSON: [{url, headers}] */
+        /** Sniffed HLS streams, newest last, as JSON: [{url, headers}] */
         @JavascriptInterface
         fun getStreams(): String {
             val arr = JSONArray()
@@ -189,11 +193,22 @@ class MainActivity : AppCompatActivity() {
             if (!url.startsWith("http")) return
             val h = HashMap<String, String>()
             try { val o = JSONObject(headersJson); o.keys().forEach { h[it] = o.getString(it) } } catch (e: Exception) { }
-            DownloadService.start(this@MainActivity)
-            downloader.start(key, url, folder, name, h)
+            Thread {
+                val gate = Api.check(this@MainActivity)
+                runOnUiThread {
+                    when (gate.status) {
+                        "ok" -> {
+                            DownloadService.start(this@MainActivity)
+                            downloader.start(key, url, folder, name, h)
+                        }
+                        "login" -> web.evaluateJavascript("onGate('login')", null)
+                        else -> web.evaluateJavascript("onGate('error')", null)
+                    }
+                }
+            }.start()
         }
 
-        /** Returns the saved file path if this episode is already downloaded, otherwise as  heh "". */
+        /** Returns the saved file path if this episode is already downloaded, otherwise returns "". */
         @JavascriptInterface
         fun findDownload(folder: String, name: String): String {
             val dir = File(Downloader.root(this@MainActivity), Downloader.safeFolder(folder))
@@ -202,9 +217,53 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun getAccount(): String =
+            JSONObject()
+                .put("signedIn", Api.token(this@MainActivity) != null)
+                .put("name", Api.name(this@MainActivity))
+                .put("link", Api.link(this@MainActivity))
+                .put("deviceId", Api.deviceId(this@MainActivity))
+                .toString()
+
+        @JavascriptInterface
+        fun signUp(name: String, email: String, pass: String) {
+            Thread {
+                val err = try {
+                    Api.signUp(name, email, pass)
+                } catch (e: Throwable) {
+                    "Sign up error: " + (e.message ?: e.javaClass.simpleName)
+                }
+                val json = JSONObject().put("ok", err.isEmpty()).put("err", err).toString()
+                runOnUiThread { web.evaluateJavascript("onSignUp($json)", null) }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun openSignup() { runOnUiThread { startActivity(Intent(this@MainActivity, LoginActivity::class.java)) } }
+
+        @JavascriptInterface
+        fun login(email: String, pass: String) {
+            Thread {
+                val err = try {
+                    Api.login(this@MainActivity, email, pass)
+                } catch (e: Throwable) {
+                    "Login error: " + (e.message ?: e.javaClass.simpleName)
+                }
+                val json = JSONObject().put("ok", err.isEmpty()).put("err", err).toString()
+                runOnUiThread {
+                    web.evaluateJavascript("onLogin($json)", null)
+                    web.evaluateJavascript("if(window.onAccount)onAccount()", null)
+                }
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun signOut() { Api.clear(this@MainActivity) }
+
+        @JavascriptInterface
         fun cancelDownload(key: String) { downloader.cancel(key) }
 
-        /** Library JSON  [{folder, files:[{name, path, size, time}]}] */
+        /** Library as JSON: [{folder, files:[{name, path, size, time}]}] */
         @JavascriptInterface
         fun listDownloads(): String {
             val arr = JSONArray()
@@ -259,12 +318,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyBars(dark: Boolean) {
-        root.setBackgroundColor(if (dark) 0xFF0F0D1C.toInt() else 0xFF0F0D1C.toInt())
+        root.setBackgroundColor(if (dark) 0xFF0A1424.toInt() else 0xFF0A1424.toInt())
         bars.isAppearanceLightStatusBars = !dark
         bars.isAppearanceLightNavigationBars = !dark
     }
 
-    /** Hide system bars,landscape + keep screen on while watching fullscreen. */
+    /** Hide system bars + landscape + keep screen on while watching fullscreen. */
     private fun enterFullscreen(on: Boolean) {
         fsMode = on
         if (on) {
@@ -281,7 +340,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // break reminder
+    //  break reminder 
 
     private fun schedule() {
         handler.removeCallbacks(breakTask)
@@ -312,10 +371,11 @@ class MainActivity : AppCompatActivity() {
         schedule()
     }
 
-    //  lifecycle
+    //  lifecycle 
 
     override fun onResume() {
         super.onResume()
+        web.evaluateJavascript("if(window.onAccount)onAccount()", null)
         val now = System.currentTimeMillis()
         if (pausedAt > 0 && now - pausedAt > RESET_GAP) usedMs = 0   // away >15 min = new session
         resumedAt = now

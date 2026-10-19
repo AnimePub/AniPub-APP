@@ -10,7 +10,7 @@ import java.io.ByteArrayInputStream
 /**
  * Blocks requests to ad/tracker hosts (including requests made from inside iframes),
  * stops ad redirects from hijacking the app's main page, and reports HLS (.m3u8) requests.
- */
+ **/
 class AdBlocker(
     private val allowedPageHosts: Set<String>,
     private val onStream: ((url: String, headers: Map<String, String>) -> Unit)? = null

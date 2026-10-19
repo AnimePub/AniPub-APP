@@ -10,7 +10,7 @@
         android:id="@+id/topBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#0F0D1C"
+        android:background="#0A1424"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="6dp"
@@ -25,7 +25,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Back"
             android:src="@drawable/ic_back"
-            app:tint="#EBE9FA" />
+            app:tint="#EAF3FF" />
 
         <TextView
             android:id="@+id/title"
@@ -34,7 +34,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#EBE9FA"
+            android:textColor="#EAF3FF"
             android:textSize="16sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -53,7 +53,7 @@
         android:id="@+id/bottomBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#0F0D1C"
+        android:background="#0A1424"
         android:gravity="center"
         android:orientation="horizontal"
         android:paddingTop="4dp"
@@ -67,7 +67,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Playback speed"
             android:src="@drawable/ic_speed"
-            app:tint="#B8B4FF" />
+            app:tint="#9EC5FF" />
 
         <ImageButton
             android:id="@+id/btnAudio"
@@ -77,7 +77,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Audio track"
             android:src="@drawable/ic_audio"
-            app:tint="#B8B4FF" />
+            app:tint="#9EC5FF" />
 
         <ImageButton
             android:id="@+id/btnSubs"
@@ -87,7 +87,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Subtitles"
             android:src="@drawable/ic_subtitles"
-            app:tint="#B8B4FF" />
+            app:tint="#9EC5FF" />
 
         <ImageButton
             android:id="@+id/btnRotate"
@@ -97,6 +97,6 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Rotate"
             android:src="@drawable/ic_rotate"
-            app:tint="#B8B4FF" />
+            app:tint="#9EC5FF" />
     </LinearLayout>
 </LinearLayout>

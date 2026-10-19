@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
@@ -12,11 +14,7 @@
         android:theme="@style/Theme.AniPub"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true">
-        <activity
-            android:name=".PlayerActivity"
-            android:exported="false"
-            android:supportsPictureInPicture="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,5 +25,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+
+        <service
+            android:name=".DownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
     </application>
 </manifest>
