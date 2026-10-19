@@ -5,8 +5,14 @@
 ![Platform](https://img.shields.io/badge/platform-Android-blue)
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![License](https://img.shields.io/badge/license-GPL3-lightgrey)
+--------
+Download The App
+<p align="center">
+  <a href="https://github.com/AnimePub/AniPub-APP/raw/master/app/release/app-release.apk" target="_blank">
+    <img src="https://img.shields.io/badge/Download-APK-4CAF50?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" width="220" />
+  </a>
+</p>
 
----
 
 ##  Features
 
