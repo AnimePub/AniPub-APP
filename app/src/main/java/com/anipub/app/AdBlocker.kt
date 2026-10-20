@@ -1,4 +1,4 @@
-package com.anipub.app
+package com.animepub.app
 
 import android.net.Uri
 import android.webkit.WebResourceRequest

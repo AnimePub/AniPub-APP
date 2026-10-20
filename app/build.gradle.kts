@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.anipub.app"
+    namespace = "com.animepub.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.anipub.app"
+        applicationId = "com.animepub.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

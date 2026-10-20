@@ -1,4 +1,4 @@
-package com.anipub.app
+package com.animepub.app
 
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
