@@ -254,7 +254,7 @@ app.querySelectorAll(".chips button").forEach(function(b){b.onclick=function(){v
 $("rnd").onclick=function(){api("/api/getlast").then(function(l){go("#/a/"+(1+Math.floor(Math.random()*l)))})};
 $("more").onclick=function(){S.page++;run(false)};run(true)}
 function run(reset){var box=$("res");if(!box)return;if(reset){S.page=1;S.items=[];box.innerHTML=skel(9)}
-var p;if(S.g.length||S.q){p=api("/api/sort?page="+S.page+"&ratefrom=0&rateto=10"+(S.q?"&name="+encodeURIComponent(S.q):"")+(S.g.length?"&genre="+encodeURIComponent(S.g.join(",")):"")).then(function(d){S.pages=d[0]||1;return d[1]||[]})}
+var p;if(S.g.length||S.q){p=api("/api/sort?page="+S.page+"&ratefrom=0&rateto=10"+(S.q?"&name="+encodeURIComponent(S.q):"")+(S.g.length?"&genre="+encodeURIComponent(S.g.join(",")):"")).then(function(d){var L=(d&&d[1])||[];S.pages=L.length>=20?S.page+1:S.page;return L})}
 else p=api("/api/findbyrating?page="+S.page).then(function(d){S.pages=S.page+1;return d.AniData||[]});
 p.then(function(a){S.items=S.items.concat(a.map(norm));box.innerHTML=S.items.length?S.items.map(card).join(""):"<p class=\"mut\">No results.</p>";$("more").style.display=S.page<S.pages?"block":"none"}).catch(function(e){box.innerHTML=fail(e)})}
 /* WATCHLIST */
@@ -332,7 +332,7 @@ dlSource(id,ep,lang,pageUrl).then(function(s){if(!s||!s.url){toast("Download sou
 Android.startDownload(id+"-"+ep+"-"+lang,s.url,title,"EP"+ep+" "+lang.toUpperCase(),JSON.stringify(s.headers||{}));toast("Download started - find it in Settings > Downloads")}).catch(function(e){toast("Download failed: "+(e.message||e))})}
 function fmtT(s){if(s<0||!isFinite(s))return"--";s=Math.round(s);if(s>=3600)return Math.floor(s/3600)+"h "+Math.floor(s%3600/60)+"m";if(s>=60)return Math.floor(s/60)+"m "+s%60+"s";return s+"s"}
 function dlHtml(){var k=Object.keys(DL);if(!k.length)return'<p class="mut">No downloads yet. Use the Download button in the player.</p>';
-return k.map(function(x){var d=DL[x],run=d.status==="running";return'<div class="card"><div style="font-weight:600">'+esc(d.name)+'</div><div class="mut" style="margin:4px 0">'+(run?d.pct+"% \u00b7 "+(d.speed/1048576).toFixed(1)+" MB/s \u00b7 "+fmtT(d.eta)+" left":d.status==="done"?"Saved: "+esc(d.msg):d.status==="error"?"Failed: "+esc(d.msg):"Cancelled")+'</div>'+(run?'<div class="bar"><i style="width:'+d.pct+'%"></i></div><button class="o full" style="margin-top:10px" data-dc="'+esc(x)+'">Cancel download</button>':"")+"</div>"}).join("")}
+return k.map(function(x){var d=DL[x],run=d.status==="running";return'<div class="card"><div style="font-weight:600">'+esc(d.name)+'</div><div class="mut" style="margin:4px 0">'+(run?d.pct+"% \u00b7 "+(d.speed/1048576).toFixed(1)+" MB/s \u00b7 "+fmtT(d.eta)+" left":d.status==="done"?"Saved \u2713 "+esc(d.msg):d.status==="error"?"Failed: "+esc(d.msg):"Cancelled")+'</div>'+(run?'<div class="bar"><i style="width:'+d.pct+'%"></i></div><button class="o full" style="margin-top:10px" data-dc="'+esc(x)+'">Cancel download</button>':"")+"</div>"}).join("")}
 function onDl(o){DL[o.key]=o;var e=$("dls");if(e)e.innerHTML=dlHtml();if(o.status==="done")toast("Downloaded: "+o.name);else if(o.status==="error")toast("Download failed: "+o.msg)}
 /* theme  */
 function applyTheme(){try{if(window.Android&&Android.setTheme)Android.setTheme(true)}catch(e){}}
