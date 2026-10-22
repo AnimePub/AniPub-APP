@@ -12,7 +12,14 @@ Download The App
     <img src="https://img.shields.io/badge/Download-APK-4CAF50?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" width="220" />
   </a>
 </p>
-
+-APKpure 
+<div align="center">
+  <a href="https://apkpure.com/anipub/com.anipub.app" target="_blank" style="text-decoration: none;">
+    <button style="background-color: #0078D4; color: white; border: none; padding: 12px 28px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0, 120, 212, 0.3);">
+      📥 From APKPure 
+    </button>
+  </a>
+</div>
 
 ##  Features
 
