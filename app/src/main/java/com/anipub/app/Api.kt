@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.content.Context
 import android.provider.Settings

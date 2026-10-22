@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.os.Bundle
 import android.webkit.WebView

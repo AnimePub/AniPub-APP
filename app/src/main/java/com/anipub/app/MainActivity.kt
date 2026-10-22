@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.Manifest
 import android.content.Intent
@@ -37,8 +37,10 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 class MainActivity : AppCompatActivity() {
 
-    private data class Stream(val url: String, val headers: Map<String, String>)
+    private data class Stream(val url: String, val headers: Map<String, String>, val time: Long = System.currentTimeMillis())
     private val streams = CopyOnWriteArrayList<Stream>()
+    private data class SubHit(val src: SubSource, val time: Long)
+    private val subs = CopyOnWriteArrayList<SubHit>()
 
     private lateinit var root: FrameLayout
     private lateinit var web: WebView
@@ -106,7 +108,7 @@ class MainActivity : AppCompatActivity() {
             settings.allowFileAccess = true
             settings.javaScriptCanOpenWindowsAutomatically = false
             settings.setSupportMultipleWindows(false)
-            webViewClient = AdBlocker(setOf("anipub.org", "anipub.org")) { url, headers ->
+            webViewClient = AdBlocker(setOf("anipub.org", "anipub.xyz")) { url, headers ->
                 onStreamSniffed(url, headers)
             }
             webChromeClient = chrome
@@ -144,10 +146,18 @@ class MainActivity : AppCompatActivity() {
 
     /** Called on a background thread by AdBlocker whenever an .m3u8 request is made. */
     private fun onStreamSniffed(url: String, headers: Map<String, String>) {
-        if (streams.any { it.url == url }) return
         val h = headers.toMutableMap()
         CookieManager.getInstance().getCookie(url)
             ?.takeIf { it.isNotBlank() }?.let { h["Cookie"] = it }
+
+        val ext = (android.net.Uri.parse(url).path?.lowercase() ?: "").substringAfterLast('.', "")
+        if (ext in listOf("vtt", "srt", "ass", "ssa")) {
+            if (subs.any { it.src.url == url }) return
+            subs.add(SubHit(SubSource(url, h, ext), System.currentTimeMillis()))
+            while (subs.size > 30) subs.removeAt(0)
+            return
+        }
+        if (streams.any { it.url == url }) return
         streams.add(Stream(url, h))
         while (streams.size > 20) streams.removeAt(0)
     }
@@ -185,7 +195,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun clearStreams() { streams.clear() }
+        fun clearStreams() { streams.clear(); subs.clear() }
 
         /** Starts a download into AniPub/<folder>/<name>. */
         @JavascriptInterface
@@ -199,7 +209,9 @@ class MainActivity : AppCompatActivity() {
                     when (gate.status) {
                         "ok" -> {
                             DownloadService.start(this@MainActivity)
-                            downloader.start(key, url, folder, name, h)
+                            val t0 = streams.firstOrNull { it.url == url }?.time ?: System.currentTimeMillis()
+                            val attach = subs.filter { kotlin.math.abs(it.time - t0) < 120_000 }.map { it.src }
+                            downloader.start(key, url, folder, name, h, attach)
                         }
                         "login" -> web.evaluateJavascript("onGate('login')", null)
                         else -> web.evaluateJavascript("onGate('error')", null)
@@ -208,12 +220,12 @@ class MainActivity : AppCompatActivity() {
             }.start()
         }
 
-        /** Returns the saved file path if this episode is already downloaded, otherwise returns "". */
+        /** Returns the saved file path if this episode is already downloaded, otherwise "". */
         @JavascriptInterface
         fun findDownload(folder: String, name: String): String {
             val dir = File(Downloader.root(this@MainActivity), Downloader.safeFolder(folder))
             val base = Downloader.safeFile(name)
-            return dir.listFiles { f -> f.isFile && f.nameWithoutExtension == base }?.firstOrNull()?.absolutePath ?: ""
+            return dir.listFiles { f -> f.isFile && (f.extension == "ts" || f.extension == "mp4") && f.nameWithoutExtension == base }?.firstOrNull()?.absolutePath ?: ""
         }
 
         @JavascriptInterface
@@ -270,7 +282,7 @@ class MainActivity : AppCompatActivity() {
             Downloader.root(this@MainActivity).listFiles { f -> f.isDirectory }
                 ?.sortedBy { it.name.lowercase() }
                 ?.forEach { dir ->
-                    val files = dir.listFiles { f -> f.isFile }?.sortedBy { it.name.lowercase() } ?: emptyList()
+                    val files = dir.listFiles { f -> f.isFile && (f.extension == "ts" || f.extension == "mp4") }?.sortedBy { it.name.lowercase() } ?: emptyList()
                     if (files.isEmpty()) return@forEach
                     val fa = JSONArray()
                     files.forEach { f ->
@@ -289,6 +301,7 @@ class MainActivity : AppCompatActivity() {
         fun deleteDownload(path: String): Boolean {
             val f = ownedFile(path) ?: return false
             val ok = f.delete()
+            sidecarsOf(f).forEach { it.delete() }
             f.parentFile?.let { d -> if (d.listFiles()?.isEmpty() == true) d.delete() }
             return ok
         }

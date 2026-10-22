@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
@@ -18,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -71,7 +72,18 @@ class PlayerActivity : AppCompatActivity() {
             }
         })
 
-        player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), resumeAt)
+        val subConfigs = sidecarsOf(file).mapIndexed { i, sf ->
+            MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(sf))
+                .setMimeType(subMime(sf.extension.lowercase()))
+                .setLabel("Subtitles ${i + 1}")
+                .setSelectionFlags(if (i == 0) C.SELECTION_FLAG_DEFAULT else 0)
+                .build()
+        }
+        val item = MediaItem.Builder()
+            .setUri(Uri.fromFile(file))
+            .setSubtitleConfigurations(subConfigs)
+            .build()
+        player.setMediaItem(item, resumeAt)
         player.prepare()
         player.playWhenReady = true
 
@@ -88,6 +100,12 @@ class PlayerActivity : AppCompatActivity() {
             else
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         }
+    }
+
+    private fun subMime(ext: String): String = when (ext) {
+        "srt" -> MimeTypes.APPLICATION_SUBRIP
+        "ass", "ssa" -> MimeTypes.TEXT_SSA
+        else -> MimeTypes.TEXT_VTT
     }
 
     private fun isLandscape() = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE

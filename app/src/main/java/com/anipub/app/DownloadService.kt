@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.app.Notification
 import android.app.NotificationChannel

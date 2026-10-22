@@ -1,4 +1,4 @@
-package com.animepub.app
+package com.anipub.app
 
 import android.net.Uri
 import android.webkit.WebResourceRequest
@@ -24,7 +24,8 @@ class AdBlocker(
         }
 
         // Runs on a background thread, so the callback must be thread-safe.
-        if (onStream != null && uri.path?.endsWith(".m3u8", ignoreCase = true) == true) {
+        val path = uri.path?.lowercase() ?: ""
+        if (onStream != null && (path.endsWith(".m3u8") || SUB_EXTS.any { path.endsWith(".$it") })) {
             onStream.invoke(uri.toString(), request.requestHeaders ?: emptyMap())
         }
         return null
@@ -40,6 +41,7 @@ class AdBlocker(
     }
 
     companion object {
+        private val SUB_EXTS = listOf("vtt", "srt", "ass", "ssa")
         private val HOSTS: Set<String> = setOf(
         "2mdn.net", "3lift.com", "a-ads.com", "acscdn.com", "ad-maven.com", "adcash.com",
         "adcolony.com", "adform.com", "adform.net", "adition.com", "adjust.com", "adk2.com",
